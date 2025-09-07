@@ -234,12 +234,45 @@
         opacity: 0.8;
         margin-top: 4px;
       }
+      .language-selection {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 20px;
+        margin-bottom: 20px;
+      }
+      .language-selection .input-group {
+        margin-bottom: 0;
+      }
+      select {
+        appearance: none;
+        background-image: url('data:image/svg+xml;charset=US-ASCII,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4 5"><path fill="%23e8eefc" d="M2 0L0 2h4zm0 5L0 3h4z"/></svg>');
+        background-repeat: no-repeat;
+        background-position: right 12px center;
+        background-size: 12px;
+      }
+      select:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(106, 161, 255, 0.2);
+      }
     </style>
   </head>
   <body>
     <div class="container">
-      <h1>Hindi Voice Bot</h1>
+      <h1>Multi-Language Voice Bot</h1>
       <p class="subtitle">Fibe NBFC Collection Agent - WebRTC Browser Calls & Twilio Phone Calls</p>
+      
+      <div class="language-selection">
+        <div class="input-group">
+          <label for="languageSelect">Select Language</label>
+          <select id="languageSelect" style="width: 100%; padding: 12px; background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.16); border-radius: 8px; color: var(--fg); font-size: 14px;">
+            <option value="hindi">Hindi (हिंदी)</option>
+            <option value="kannada">Kannada (ಕನ್ನಡ)</option>
+            <option value="telugu">Telugu (తెలుగు)</option>
+          </select>
+        </div>
+      </div>
       
       <div class="cards-grid">
         <!-- WebRTC Card -->
@@ -312,6 +345,10 @@
       function formatTimestamp() {
         const now = new Date();
         return now.toLocaleTimeString() + '.' + String(now.getMilliseconds()).padStart(3, '0');
+      }
+
+      function getSelectedLanguage() {
+        return $('languageSelect').value;
       }
 
       function addLog(containerId, message, type = 'info') {
@@ -395,7 +432,10 @@
 
           const resp = await fetch('/rtc', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/sdp' },
+            headers: { 
+              'Content-Type': 'application/sdp',
+              'X-Language': getSelectedLanguage()
+            },
             body: offer.sdp,
           });
 
@@ -475,7 +515,10 @@
           const response = await fetch('/twilio-realtime/call', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phoneNumber })
+            body: JSON.stringify({ 
+              phoneNumber,
+              language: getSelectedLanguage()
+            })
           });
 
           const data = await response.json();

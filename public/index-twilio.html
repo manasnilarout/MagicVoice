@@ -199,7 +199,18 @@
   </head>
   <body>
     <div class="container">
-      <h1>🎤 Voice Bot Control Panel</h1>
+      <h1>🎤 Multi-Language Voice Bot Control Panel</h1>
+      
+      <div class="language-selection" style="background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+        <div class="input-group">
+          <label for="languageSelect">Select Language</label>
+          <select id="languageSelect" style="width: 100%; padding: 10px 14px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; color: var(--fg); font-size: 15px; appearance: none;">
+            <option value="hindi">Hindi (हिंदी)</option>
+            <option value="kannada">Kannada (ಕನ್ನಡ)</option>
+            <option value="telugu">Telugu (తెలుగు)</option>
+          </select>
+        </div>
+      </div>
       
       <div class="cards-grid">
         <!-- Twilio Phone Call Card -->
@@ -268,6 +279,11 @@
       let currentCallSid = null;
       let isWebRTCActive = false;
 
+      // Utility functions
+      function getSelectedLanguage() {
+        return document.getElementById('languageSelect').value;
+      }
+
       // Logging functions
       function addLog(elementId, message, type = '') {
         const logsElement = document.getElementById(elementId);
@@ -303,7 +319,10 @@
           const response = await fetch('/twilio-realtime/call', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phoneNumber })
+            body: JSON.stringify({ 
+              phoneNumber,
+              language: getSelectedLanguage()
+            })
           });
 
           const data = await response.json();
@@ -389,7 +408,10 @@
           
           const response = await fetch('/rtc', {
             method: 'POST',
-            headers: { 'Content-Type': 'text/plain' },
+            headers: { 
+              'Content-Type': 'text/plain',
+              'X-Language': getSelectedLanguage()
+            },
             body: offer.sdp
           });
 

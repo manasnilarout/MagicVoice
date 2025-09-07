@@ -10,9 +10,13 @@ router.post('/', express.text({ type: '*/*' }), async (req, res) => {
     const url = "https://api.openai.com/v1/realtime/calls";
     const headers = makeHeaders();
     
+    // Get language from header, default to hindi
+    const language = req.headers['x-language'] || 'hindi';
+    console.log(`🌐 Creating WebRTC session with language: ${language}`);
+    
     const formData = new FormData();
     formData.set("sdp", req.body);
-    formData.set("session", JSON.stringify(makeSession()));
+    formData.set("session", JSON.stringify(makeSession(language)));
     
     const opts = { method: "POST", headers, body: formData };
     const resp = await fetch(url, opts);

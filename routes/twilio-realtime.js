@@ -8,6 +8,7 @@ dotenv.config();
 
 const router = express.Router();
 const activeConnections = new Map();
+const callMetadata = new Map(); // Store call-specific metadata like language
 
 // Configuration
 const VOICE = 'alloy';
@@ -29,7 +30,8 @@ const LOG_EVENT_TYPES = [
 // Initiate an outbound call
 router.post('/call', express.json(), async (req, res) => {
   try {
-    const { phoneNumber } = req.body;
+    const { phoneNumber, language = 'hindi' } = req.body;
+    console.log(`🌐 Creating Twilio call with language: ${language}`);
     
     if (!twilioClient) {
       return res.status(500).json({ error: 'Twilio not configured' });
@@ -57,6 +59,9 @@ router.post('/call', express.json(), async (req, res) => {
       record: false
     });
 
+    // Store language metadata for this call
+    callMetadata.set(call.sid, { language, phoneNumber });
+    
     console.log(`✅ Call initiated to ${phoneNumber}, Call SID: ${call.sid}`);
     res.json({ 
       success: true, 
@@ -112,6 +117,7 @@ export const mediaStreamWebSocketHandler = (ws, req) => {
   // Connection-specific state
   let streamSid = null;
   let callSid = null;
+  let callLanguage = 'hindi'; // Default language
   let latestMediaTimestamp = 0;
   let lastAssistantItem = null;
   let markQueue = [];
@@ -127,7 +133,7 @@ export const mediaStreamWebSocketHandler = (ws, req) => {
 
   // Initialize session with OpenAI
   const initializeSession = () => {
-    const baseSession = makeSession();
+    const baseSession = makeSession(callLanguage);
     const sessionUpdate = {
       type: 'session.update',
       session: {
@@ -148,7 +154,7 @@ export const mediaStreamWebSocketHandler = (ws, req) => {
       },
     };
 
-    console.log('📋 Sending session update with Hindi instructions');
+    console.log(`📋 Sending session update with ${callLanguage} instructions`);
     openAiWs.send(JSON.stringify(sessionUpdate));
     
     // Trigger initial response after session setup
@@ -279,7 +285,15 @@ export const mediaStreamWebSocketHandler = (ws, req) => {
         case 'start':
           streamSid = data.start.streamSid;
           callSid = data.start.callSid;
-          console.log(`📞 Media stream started - CallSid: ${callSid}, StreamSid: ${streamSid}`);
+          
+          // Retrieve language from metadata
+          const metadata = callMetadata.get(callSid);
+          if (metadata) {
+            callLanguage = metadata.language;
+            console.log(`📞 Media stream started - CallSid: ${callSid}, StreamSid: ${streamSid}, Language: ${callLanguage}`);
+          } else {
+            console.log(`📞 Media stream started - CallSid: ${callSid}, StreamSid: ${streamSid}, Language: ${callLanguage} (default)`);
+          }
           
           // Reset timestamps for new stream
           responseStartTimestampTwilio = null;
@@ -331,6 +345,8 @@ export const mediaStreamWebSocketHandler = (ws, req) => {
     }
     if (callSid) {
       activeConnections.delete(callSid);
+      // Clean up call metadata to prevent memory leaks
+      callMetadata.delete(callSid);
     }
   });
 
