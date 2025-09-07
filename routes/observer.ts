@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import WebSocket from 'ws';
-import { makeHeaders } from './utils';
+import { makeHeaders } from './utils.js';
 
 const router = express.Router();
 

@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import fetch from 'node-fetch';
-import { makeHeaders, makeSession } from './utils';
+import { makeHeaders, makeSession, getAppConfiguration } from './utils.js';
 
 const router = express.Router();
 
@@ -10,13 +10,16 @@ router.post('/', express.text({ type: '*/*' }), async (req: Request, res: Respon
     const url = "https://api.openai.com/v1/realtime/calls";
     const headers = makeHeaders();
     
-    // Get language from header, default to hindi
-    const language = req.headers['x-language'] as string || 'hindi';
-    console.log(`🌐 Creating WebRTC session with language: ${language}`);
+    // Get language and persona from headers
+    const language = req.headers['x-language'] as string || getAppConfiguration().bot.defaultLanguage;
+    const personaType = req.headers['x-persona'] as string;
+    const config = getAppConfiguration(personaType);
+    console.log(`🌐 Creating WebRTC session with language: ${language}, persona: ${personaType || 'default'}`);
+    console.log(`📋 Using bot persona: ${config.persona.name} (${config.persona.role})`);
     
     const formData = new FormData();
     formData.set("sdp", req.body);
-    formData.set("session", JSON.stringify(makeSession(language)));
+    formData.set("session", JSON.stringify(makeSession(language, personaType)));
     
     const opts = { method: "POST", headers, body: formData };
     const resp = await fetch(url, opts);

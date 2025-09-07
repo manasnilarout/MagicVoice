@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
 import WebSocket from 'ws';
-import { twilioClient, twilioPhoneNumber } from './twilio-utils';
-import { makeSession } from './utils';
+import { twilioClient, twilioPhoneNumber } from './twilio-utils.js';
+import { makeSession, getAppConfiguration } from './utils.js';
 import dotenv from 'dotenv';
 import { 
   CallMetadata, 
@@ -9,17 +9,21 @@ import {
   OpenAIRealtimeMessage,
   TwilioCallRequest,
   TwilioWebhookRequest 
-} from '../types';
+} from '../types/index.js';
 
 dotenv.config();
 
 const router = express.Router();
 const activeConnections = new Map<string, WebSocket>();
-const callMetadata = new Map<string, CallMetadata>();
 
-// Configuration
-const VOICE = 'alloy';
-const TEMPERATURE = 0.8;
+interface ExtendedCallMetadata extends CallMetadata {
+  personaType?: string;
+}
+const callMetadata = new Map<string, ExtendedCallMetadata>();
+
+// Get configuration
+const appConfig = getAppConfiguration();
+const TEMPERATURE = appConfig.bot.temperature;
 const SHOW_TIMING_MATH = false;
 
 // Log event types for debugging
@@ -34,11 +38,18 @@ const LOG_EVENT_TYPES = [
     'session.updated'
 ];
 
+// Enhanced request interface for calls
+interface EnhancedTwilioCallRequest extends TwilioCallRequest {
+  personaType?: string;
+}
+
 // Initiate an outbound call
-router.post('/call', express.json(), async (req: Request<{}, {}, TwilioCallRequest>, res: Response): Promise<void> => {
+router.post('/call', express.json(), async (req: Request<{}, {}, EnhancedTwilioCallRequest>, res: Response): Promise<void> => {
   try {
-    const { phoneNumber, language = 'hindi' } = req.body;
-    console.log(`🌐 Creating Twilio call with language: ${language}`);
+    const { phoneNumber, language = appConfig.bot.defaultLanguage, personaType } = req.body;
+    const config = getAppConfiguration(personaType);
+    console.log(`🌐 Creating Twilio call with language: ${language}, persona: ${personaType || 'default'}`);
+    console.log(`📋 Using bot persona: ${config.persona.name} (${config.persona.role})`);
     
     if (!twilioClient) {
       res.status(500).json({ error: 'Twilio not configured' });
@@ -68,8 +79,8 @@ router.post('/call', express.json(), async (req: Request<{}, {}, TwilioCallReque
       record: false
     });
 
-    // Store language metadata for this call
-    callMetadata.set(call.sid, { language, phoneNumber });
+    // Store call metadata including persona
+    callMetadata.set(call.sid, { language, phoneNumber, personaType });
     
     console.log(`✅ Call initiated to ${phoneNumber}, Call SID: ${call.sid}`);
     res.json({ 
@@ -126,7 +137,8 @@ export const mediaStreamWebSocketHandler = (ws: WebSocket, _req: Request) => {
   // Connection-specific state
   let streamSid: string | null = null;
   let callSid: string | null = null;
-  let callLanguage = 'hindi';
+  let callLanguage = appConfig.bot.defaultLanguage;
+  let callPersonaType: string | undefined = undefined;
   let latestMediaTimestamp = 0;
   let lastAssistantItem: string | null = null;
   let markQueue: string[] = [];
@@ -142,7 +154,7 @@ export const mediaStreamWebSocketHandler = (ws: WebSocket, _req: Request) => {
 
   // Initialize session with OpenAI
   const initializeSession = () => {
-    const baseSession = makeSession(callLanguage);
+    const baseSession = makeSession(callLanguage, callPersonaType);
     const sessionUpdate = {
       type: 'session.update',
       session: {
@@ -156,14 +168,15 @@ export const mediaStreamWebSocketHandler = (ws: WebSocket, _req: Request) => {
           },
           output: {
             format: { type: 'audio/pcmu' }, 
-            voice: VOICE 
+            voice: getAppConfiguration(callPersonaType).bot.voice
           },
         },
         instructions: baseSession.instructions,
       },
     };
 
-    console.log(`📋 Sending session update with ${callLanguage} instructions`);
+    const currentConfig = getAppConfiguration(callPersonaType);
+    console.log(`📋 Sending session update with ${callLanguage} instructions for persona: ${currentConfig.persona.name}`);
     openAiWs.send(JSON.stringify(sessionUpdate));
     
     // Trigger initial response after session setup
@@ -296,11 +309,13 @@ export const mediaStreamWebSocketHandler = (ws: WebSocket, _req: Request) => {
             streamSid = data.start.streamSid;
             callSid = data.start.callSid;
             
-            // Retrieve language from metadata
+            // Retrieve language and persona from metadata
             const metadata = callMetadata.get(callSid);
             if (metadata) {
               callLanguage = metadata.language;
-              console.log(`📞 Media stream started - CallSid: ${callSid}, StreamSid: ${streamSid}, Language: ${callLanguage}`);
+              callPersonaType = metadata.personaType;
+              const config = getAppConfiguration(callPersonaType);
+              console.log(`📞 Media stream started - CallSid: ${callSid}, StreamSid: ${streamSid}, Language: ${callLanguage}, Persona: ${config.persona.name}`);
             } else {
               console.log(`📞 Media stream started - CallSid: ${callSid}, StreamSid: ${streamSid}, Language: ${callLanguage} (default)`);
             }

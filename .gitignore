@@ -141,8 +141,6 @@ secrets.json
 *.crt
 *.cert
 
-# Docker
-.dockerignore
-Dockerfile
-docker-compose.yml
-docker-compose.*.yml
+# Configs
+*.ngnix
+
