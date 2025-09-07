@@ -1,15 +1,16 @@
-# Twilio Voice Bot - Hindi Collection Agent
+# Twilio Voice Bot - Multi-Language Support
 
-A voice bot application that makes outbound phone calls using Twilio and OpenAI's GPT-4o Realtime Preview model. The bot is configured as a Hindi-speaking collection agent for Fibe NBFC.
+A TypeScript-based voice bot application that makes outbound phone calls using Twilio and OpenAI's GPT-4o Realtime Preview model. The bot supports multiple languages (Hindi, Kannada, Telugu) and can be configured for various use cases.
 
 ## Features
 
 - **WebRTC Browser Calls**: Direct voice chat through your browser with microphone access
 - **Twilio Phone Calls**: Make outbound calls to any phone number
 - **Bidirectional Audio**: Real-time voice conversation with natural interruption handling
-- **Hindi Language**: Configured to speak only in Hindi as a collection agent
+- **Multi-Language Support**: Supports Hindi, Kannada, and Telugu languages
 - **OpenAI Realtime API**: Powered by GPT-4o Realtime Preview model
 - **Dual Interface**: Single web page supports both WebRTC and phone calls
+- **TypeScript**: Fully typed codebase with strict type checking
 
 ## Prerequisites
 
@@ -78,15 +79,22 @@ This is the **most important step**. Go to [Twilio Console](https://console.twil
 
 ⚠️ **Important**: Replace `your-ngrok-url.ngrok-free.app` with your actual ngrok URL.
 
-### 5. Run the Application
+### 5. Build and Run the Application
 
+#### Development Mode
 ```bash
-npm start
+npm run dev  # Runs TypeScript directly with hot reload
 ```
 
-For development with auto-reload:
+#### Production Mode
 ```bash
-npm run dev
+npm run build  # Compile TypeScript to JavaScript
+npm start      # Run compiled JavaScript
+```
+
+#### Type Checking
+```bash
+npm run type-check  # Check types without building
 ```
 
 ## Usage
@@ -137,16 +145,24 @@ You can test if everything is configured correctly by:
 
 ```
 node-impl/
-├── server.js                    # Main Express server
+├── server.ts                    # Main Express server (TypeScript)
 ├── routes/
-│   ├── twilio-realtime.js      # Twilio integration with OpenAI Realtime API
-│   ├── twilio-utils.js         # Twilio client utilities
-│   ├── rtc.js                  # WebRTC route handler for browser calls
-│   ├── observer.js             # WebRTC session monitoring
-│   └── utils.js                # Bot configuration and session management  
+│   ├── twilio-realtime.ts      # Twilio integration with OpenAI Realtime API
+│   ├── twilio-utils.ts         # Twilio client utilities
+│   ├── rtc.ts                  # WebRTC route handler for browser calls
+│   ├── observer.ts             # WebRTC session monitoring
+│   └── utils.ts                # Bot configuration and session management
+├── types/
+│   └── index.ts                # TypeScript type definitions
+├── prompts/
+│   ├── hindi.txt               # Hindi language prompt
+│   ├── kannada.txt             # Kannada language prompt
+│   └── telugu.txt              # Telugu language prompt
 ├── public/
 │   ├── index.html              # Main interface (WebRTC + Twilio)
 │   └── index-twilio.html       # Legacy Twilio-only interface
+├── dist/                       # Compiled JavaScript (generated)
+├── tsconfig.json               # TypeScript configuration
 ├── package.json                # Dependencies and scripts
 ├── .env.example               # Environment variables template
 └── README.md                  # This file
@@ -154,14 +170,36 @@ node-impl/
 
 ## Bot Configuration
 
-The bot is configured as a **Fibe NBFC collection agent** with these characteristics:
+### Language Support
 
-- **Language**: Hindi only
-- **Role**: Loan recovery agent
-- **Customer**: Manoj Kumar  
-- **Loan Details**: ₹1,00,000 loan with ₹10,000 monthly EMI
-- **Tone**: Professional and polite
-- **Voice**: Alloy voice for natural Hindi pronunciation
+The bot supports multiple languages that can be selected dynamically:
+
+- **Hindi** (default)
+- **Kannada**
+- **Telugu**
+
+Language can be specified when initiating calls:
+
+```javascript
+// Phone call with language selection
+POST /twilio-realtime/call
+{
+  "phoneNumber": "+919876543210",
+  "language": "kannada"  // Options: hindi, kannada, telugu
+}
+
+// WebRTC call with language header
+POST /rtc
+Headers: {
+  "x-language": "telugu"
+}
+```
+
+### Voice Configuration
+
+- **Voice**: Marin voice for natural pronunciation
+- **Model**: GPT-4o Realtime Preview
+- **Temperature**: 0.8 for natural conversation flow
 
 ## Troubleshooting
 
@@ -180,25 +218,63 @@ The bot is configured as a **Fibe NBFC collection agent** with these characteris
    - Double-check webhook URL configuration in Twilio Console
    - Make sure ngrok URL is up-to-date
 
-4. **Bot doesn't speak Hindi**
-   - The bot instructions are configured in Hindi in `utils.js`
-   - Check console logs for any session configuration errors
+4. **Bot language issues**
+   - Language prompts are stored in `prompts/` directory
+   - Default language is Hindi if not specified
+   - Check console logs for language loading errors
 
 ### Development Tips:
 
-- Use `npm run dev` for auto-reload during development
+- Use `npm run dev` for TypeScript hot-reload during development
+- Run `npm run type-check` to validate types without building
 - Check browser console and server logs for detailed error messages
 - Test webhook endpoints manually by visiting them in browser
 - Update Twilio webhook URLs whenever ngrok restarts
+- TypeScript provides better IDE support with IntelliSense
+
+## TypeScript Features
+
+This project is fully written in TypeScript with:
+
+- **Strict Type Checking**: Enabled in `tsconfig.json` for maximum type safety
+- **Custom Type Definitions**: Interfaces for Twilio messages, OpenAI responses, and session configs
+- **Type-Safe Routes**: All Express routes and handlers are fully typed
+- **WebSocket Type Safety**: Typed WebSocket message handling for both Twilio and OpenAI
+- **IDE Support**: Full IntelliSense and auto-completion in VS Code and other TypeScript-aware editors
 
 ## Production Deployment
 
 For production deployment:
 
-1. Deploy to a service with HTTPS (Heroku, Railway, etc.)
-2. Update Twilio webhook URLs to use your production domain
-3. Remove ngrok and update environment variables
-4. Enable Twilio webhook signature validation for security
+1. Build the TypeScript code: `npm run build`
+2. Deploy to a service with HTTPS (Heroku, Railway, etc.)
+3. Update Twilio webhook URLs to use your production domain
+4. Remove ngrok and update environment variables
+5. Enable Twilio webhook signature validation for security
+6. Set `NODE_ENV=production` in environment variables
+
+## Future Enhancements
+
+### Planned Migration to OpenAI Agents SDK
+
+A migration plan (`migrate-openai-agent.md`) has been created to modernize the codebase using the `@openai/agents` SDK, which will provide:
+
+- **60-70% code reduction** in WebSocket handling
+- **Built-in error recovery** and reconnection logic
+- **Tool calling capabilities** for extending bot functionality
+- **Better performance** with SDK optimizations
+- **Easier maintenance** with SDK updates
+
+See `migrate-openai-agent.md` for the detailed migration strategy.
+
+## Contributing
+
+Contributions are welcome! Please ensure:
+
+1. All code is written in TypeScript
+2. Types are properly defined (no `any` types)
+3. Code passes type checking: `npm run type-check`
+4. Follow existing code style and patterns
 
 ## License
 
