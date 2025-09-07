@@ -1,0 +1,24 @@
+{
+  "name": "voice-bot-node",
+  "version": "1.0.0",
+  "description": "Voice bot using OpenAI Realtime API - Node.js implementation",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-ws": "^5.0.2",
+    "twilio": "^4.19.0",
+    "ws": "^8.16.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "node-fetch": "^3.3.2"
+  }
+}
