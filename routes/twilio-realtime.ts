@@ -1,14 +1,21 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import WebSocket from 'ws';
-import { twilioClient, twilioPhoneNumber } from './twilio-utils.js';
-import { makeSession } from './utils.js';
+import { twilioClient, twilioPhoneNumber } from './twilio-utils';
+import { makeSession } from './utils';
 import dotenv from 'dotenv';
+import { 
+  CallMetadata, 
+  TwilioMediaMessage, 
+  OpenAIRealtimeMessage,
+  TwilioCallRequest,
+  TwilioWebhookRequest 
+} from '../types';
 
 dotenv.config();
 
 const router = express.Router();
-const activeConnections = new Map();
-const callMetadata = new Map(); // Store call-specific metadata like language
+const activeConnections = new Map<string, WebSocket>();
+const callMetadata = new Map<string, CallMetadata>();
 
 // Configuration
 const VOICE = 'alloy';
@@ -28,17 +35,19 @@ const LOG_EVENT_TYPES = [
 ];
 
 // Initiate an outbound call
-router.post('/call', express.json(), async (req, res) => {
+router.post('/call', express.json(), async (req: Request<{}, {}, TwilioCallRequest>, res: Response): Promise<void> => {
   try {
     const { phoneNumber, language = 'hindi' } = req.body;
     console.log(`🌐 Creating Twilio call with language: ${language}`);
     
     if (!twilioClient) {
-      return res.status(500).json({ error: 'Twilio not configured' });
+      res.status(500).json({ error: 'Twilio not configured' });
+      return;
     }
     
     if (!phoneNumber) {
-      return res.status(400).json({ error: 'Phone number is required' });
+      res.status(400).json({ error: 'Phone number is required' });
+      return;
     }
 
     // Get the base URL for webhooks
@@ -52,7 +61,7 @@ router.post('/call', express.json(), async (req, res) => {
     // Create the call with media streams
     const call = await twilioClient.calls.create({
       to: phoneNumber,
-      from: twilioPhoneNumber,
+      from: twilioPhoneNumber!,
       url: `${baseUrl}/twilio-realtime/answer`,
       statusCallback: `${baseUrl}/twilio-realtime/status`,
       statusCallbackEvent: ['initiated', 'ringing', 'answered', 'completed'],
@@ -69,14 +78,14 @@ router.post('/call', express.json(), async (req, res) => {
       status: call.status 
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error initiating call:', error);
     res.status(500).json({ error: error.message });
   }
 });
 
 // TwiML endpoint - handles call when answered
-router.get('/answer', (req, res) => {
+router.get('/answer', (_req: Request, res: Response) => {
   console.log('📞 Twilio webhook verification request received');
   res.type('text/xml');
   res.send(`<?xml version="1.0" encoding="UTF-8"?>
@@ -86,7 +95,7 @@ router.get('/answer', (req, res) => {
 });
 
 // POST handler for actual call handling
-router.post('/answer', express.urlencoded({ extended: false }), (req, res) => {
+router.post('/answer', express.urlencoded({ extended: false }), (req: Request, res: Response) => {
   const callSid = req.body.CallSid;
   console.log(`📞 Call answered: ${callSid}`);
 
@@ -111,17 +120,17 @@ router.post('/answer', express.urlencoded({ extended: false }), (req, res) => {
 });
 
 // WebSocket handler for Twilio Media Streams
-export const mediaStreamWebSocketHandler = (ws, req) => {
+export const mediaStreamWebSocketHandler = (ws: WebSocket, _req: Request) => {
   console.log('🎙️ Twilio Media Stream WebSocket connected');
   
   // Connection-specific state
-  let streamSid = null;
-  let callSid = null;
-  let callLanguage = 'hindi'; // Default language
+  let streamSid: string | null = null;
+  let callSid: string | null = null;
+  let callLanguage = 'hindi';
   let latestMediaTimestamp = 0;
-  let lastAssistantItem = null;
-  let markQueue = [];
-  let responseStartTimestampTwilio = null;
+  let lastAssistantItem: string | null = null;
+  let markQueue: string[] = [];
+  let responseStartTimestampTwilio: number | null = null;
   
   // Connect to OpenAI Realtime API
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
@@ -213,9 +222,9 @@ export const mediaStreamWebSocketHandler = (ws, req) => {
     setTimeout(initializeSession, 100);
   });
 
-  openAiWs.on('message', (data) => {
+  openAiWs.on('message', (data: WebSocket.Data) => {
     try {
-      const response = JSON.parse(data.toString());
+      const response: OpenAIRealtimeMessage = JSON.parse(data.toString());
 
       if (LOG_EVENT_TYPES.includes(response.type)) {
         console.log(`📌 OpenAI event: ${response.type}`);
@@ -268,7 +277,7 @@ export const mediaStreamWebSocketHandler = (ws, req) => {
     }
   });
 
-  openAiWs.on('error', (error) => {
+  openAiWs.on('error', (error: Error) => {
     console.error('OpenAI WebSocket error:', error);
   });
 
@@ -277,40 +286,44 @@ export const mediaStreamWebSocketHandler = (ws, req) => {
   });
 
   // Handle incoming messages from Twilio
-  ws.on('message', (message) => {
+  ws.on('message', (message: WebSocket.Data) => {
     try {
-      const data = JSON.parse(message.toString());
+      const data: TwilioMediaMessage = JSON.parse(message.toString());
 
       switch (data.event) {
         case 'start':
-          streamSid = data.start.streamSid;
-          callSid = data.start.callSid;
-          
-          // Retrieve language from metadata
-          const metadata = callMetadata.get(callSid);
-          if (metadata) {
-            callLanguage = metadata.language;
-            console.log(`📞 Media stream started - CallSid: ${callSid}, StreamSid: ${streamSid}, Language: ${callLanguage}`);
-          } else {
-            console.log(`📞 Media stream started - CallSid: ${callSid}, StreamSid: ${streamSid}, Language: ${callLanguage} (default)`);
+          if (data.start) {
+            streamSid = data.start.streamSid;
+            callSid = data.start.callSid;
+            
+            // Retrieve language from metadata
+            const metadata = callMetadata.get(callSid);
+            if (metadata) {
+              callLanguage = metadata.language;
+              console.log(`📞 Media stream started - CallSid: ${callSid}, StreamSid: ${streamSid}, Language: ${callLanguage}`);
+            } else {
+              console.log(`📞 Media stream started - CallSid: ${callSid}, StreamSid: ${streamSid}, Language: ${callLanguage} (default)`);
+            }
+            
+            // Reset timestamps for new stream
+            responseStartTimestampTwilio = null;
+            latestMediaTimestamp = 0;
           }
-          
-          // Reset timestamps for new stream
-          responseStartTimestampTwilio = null;
-          latestMediaTimestamp = 0;
           break;
 
         case 'media':
           // Track latest timestamp for interruption handling
-          latestMediaTimestamp = data.media.timestamp;
-          
-          // Forward audio to OpenAI
-          if (openAiWs.readyState === WebSocket.OPEN && data.media?.payload) {
-            const audioAppend = {
-              type: 'input_audio_buffer.append',
-              audio: data.media.payload
-            };
-            openAiWs.send(JSON.stringify(audioAppend));
+          if (data.media) {
+            latestMediaTimestamp = parseInt(data.media.timestamp);
+            
+            // Forward audio to OpenAI
+            if (openAiWs.readyState === WebSocket.OPEN && data.media.payload) {
+              const audioAppend = {
+                type: 'input_audio_buffer.append',
+                audio: data.media.payload
+              };
+              openAiWs.send(JSON.stringify(audioAppend));
+            }
           }
           break;
 
@@ -350,18 +363,18 @@ export const mediaStreamWebSocketHandler = (ws, req) => {
     }
   });
 
-  ws.on('error', (error) => {
+  ws.on('error', (error: Error) => {
     console.error('Twilio WebSocket error:', error);
   });
 };
 
 // Status callback endpoint
-router.get('/status', (req, res) => {
+router.get('/status', (_req: Request, res: Response) => {
   console.log('📞 Status webhook verification request received');
   res.status(200).send('Status webhook configured');
 });
 
-router.post('/status', express.urlencoded({ extended: false }), (req, res) => {
+router.post('/status', express.urlencoded({ extended: false }), (req: Request<{}, {}, TwilioWebhookRequest>, res: Response) => {
   const { CallSid, CallStatus, CallDuration } = req.body;
   console.log(`📞 Call status - SID: ${CallSid}, Status: ${CallStatus}, Duration: ${CallDuration}s`);
   

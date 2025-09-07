@@ -1,17 +1,17 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import fetch from 'node-fetch';
-import { makeHeaders, makeSession } from './utils.js';
+import { makeHeaders, makeSession } from './utils';
 
 const router = express.Router();
 
 // POST /rtc : create a new WebRTC call
-router.post('/', express.text({ type: '*/*' }), async (req, res) => {
+router.post('/', express.text({ type: '*/*' }), async (req: Request, res: Response): Promise<void> => {
   try {
     const url = "https://api.openai.com/v1/realtime/calls";
     const headers = makeHeaders();
     
     // Get language from header, default to hindi
-    const language = req.headers['x-language'] || 'hindi';
+    const language = req.headers['x-language'] as string || 'hindi';
     console.log(`🌐 Creating WebRTC session with language: ${language}`);
     
     const formData = new FormData();
@@ -24,7 +24,8 @@ router.post('/', express.text({ type: '*/*' }), async (req, res) => {
     if (!resp.ok) {
       const errText = await resp.text().catch(() => "<no body>");
       console.error(`🔴 start call failed: ${resp.status} ${errText}`);
-      return res.status(500).text("Internal error");
+      res.status(500).send("Internal error");
+      return;
     }
 
     const contentType = resp.headers.get("Content-Type");
@@ -42,11 +43,13 @@ router.post('/', express.text({ type: '*/*' }), async (req, res) => {
     });
 
     // Send the response back to client
-    res.set('Content-Type', contentType);
+    if (contentType) {
+      res.set('Content-Type', contentType);
+    }
     const responseText = await resp.text();
     res.send(responseText);
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('RTC call error:', error);
     res.status(500).json({ error: error.message });
   }

@@ -1,11 +1,18 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import WebSocket from 'ws';
-import { makeHeaders } from './utils.js';
+import { makeHeaders } from './utils';
 
 const router = express.Router();
 
+interface ObserverMessage {
+  type: string;
+  error?: {
+    message: string;
+  };
+}
+
 // POST /observer/:callId : establish WebSocket connection to monitor the call
-router.post('/:callId', express.json(), async (req, res) => {
+router.post('/:callId', express.json(), async (req: Request<{ callId: string }>, res: Response) => {
   try {
     const callId = req.params.callId;
     const url = `wss://api.openai.com/v1/realtime?call_id=${callId}`;
@@ -17,9 +24,9 @@ router.post('/:callId', express.json(), async (req, res) => {
       setTimeout(() => ws.send(JSON.stringify({ type: "response.create" })), 250);
     });
     
-    ws.on('message', (data) => {
+    ws.on('message', (data: WebSocket.Data) => {
       try {
-        const message = JSON.parse(data.toString());
+        const message: ObserverMessage = JSON.parse(data.toString());
         
         // Log all messages except audio transcript deltas (too verbose)
         if (message.type !== "response.audio_transcript.delta") {
@@ -39,7 +46,7 @@ router.post('/:callId', express.json(), async (req, res) => {
       }
     });
     
-    ws.on('error', (error) => {
+    ws.on('error', (error: Error) => {
       console.error(`🔴 Observer WebSocket failed for call ${callId}:`, error.message);
     });
 
@@ -50,7 +57,7 @@ router.post('/:callId', express.json(), async (req, res) => {
     // Respond immediately; WebSocket continues in background
     res.status(200).json({ success: true, message: `Observer started for call ${callId}` });
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('Observer setup error:', error);
     res.status(500).json({ error: error.message });
   }

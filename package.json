@@ -2,11 +2,13 @@
   "name": "voice-bot-node",
   "version": "1.0.0",
   "description": "Voice bot using OpenAI Realtime API - Node.js implementation",
-  "main": "server.js",
+  "main": "dist/server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js",
-    "dev": "node --watch server.js"
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx watch server.ts",
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "dotenv": "^16.3.1",
@@ -19,6 +21,12 @@
     "node": ">=18.0.0"
   },
   "devDependencies": {
-    "node-fetch": "^3.3.2"
+    "@types/express": "^5.0.3",
+    "@types/express-ws": "^3.0.5",
+    "@types/node": "^24.3.1",
+    "@types/ws": "^8.18.1",
+    "node-fetch": "^3.3.2",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2"
   }
 }

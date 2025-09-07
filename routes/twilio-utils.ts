@@ -1,5 +1,6 @@
 import twilio from 'twilio';
 import dotenv from 'dotenv';
+import { Request } from 'express';
 
 dotenv.config();
 
@@ -15,12 +16,16 @@ const client = accountSid && authToken ? twilio(accountSid, authToken) : null;
 
 export { client as twilioClient, twilioPhoneNumber };
 
-export function getTwilioWebhookUrl(baseUrl, path) {
+export function getTwilioWebhookUrl(baseUrl: string, path: string): string {
   return `${baseUrl}${path}`;
 }
 
-export function validateTwilioRequest(req, authToken, url) {
-  const twilioSignature = req.headers['x-twilio-signature'];
+export function validateTwilioRequest(
+  req: Request, 
+  authToken: string, 
+  url: string
+): boolean {
+  const twilioSignature = req.headers['x-twilio-signature'] as string;
   return twilio.validateRequest(
     authToken,
     twilioSignature,

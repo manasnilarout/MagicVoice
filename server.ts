@@ -5,10 +5,9 @@ import express from 'express';
 import expressWs from 'express-ws';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import twilioRealtimeRouter, { mediaStreamWebSocketHandler } from './routes/twilio-realtime.js';
-import rtcRouter from './routes/rtc.js';
-import observerRouter from './routes/observer.js';
-
+import twilioRealtimeRouter, { mediaStreamWebSocketHandler } from './routes/twilio-realtime';
+import rtcRouter from './routes/rtc';
+import observerRouter from './routes/observer';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,15 +25,15 @@ app.use('/rtc', rtcRouter);
 app.use('/observer', observerRouter);
 
 // Register WebSocket endpoint for Twilio Media Stream
-app.ws('/twilio-realtime/media-stream', mediaStreamWebSocketHandler);
+(app as any).ws('/twilio-realtime/media-stream', mediaStreamWebSocketHandler);
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/', (req, res) => {
+app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index-twilio.html'));
 });
 
-app.get('/twilio', (req, res) => {
+app.get('/twilio', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index-twilio.html'));
 });
 
