@@ -6,7 +6,7 @@
   },
   "bot": {
     "defaultLanguage": "hindi",
-    "supportedLanguages": ["english", "hindi"]
+    "supportedLanguages": ["english", "hindi", "kannada", "telugu"]
   },
   "persona": {
     "type": "debt_collection_agent",
