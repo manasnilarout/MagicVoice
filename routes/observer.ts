@@ -1,6 +1,7 @@
 import express, { Request, Response } from 'express';
 import WebSocket from 'ws';
 import { makeHeaders } from './utils.js';
+import { audioRecorderManager } from '../utils/audioUtils.js';
 import { executeFunctionCall } from '../functions/index.js';
 
 const router = express.Router();
@@ -30,6 +31,8 @@ interface ObserverMessage {
   error?: {
     message: string;
   };
+  audio?: string; // Base64 encoded audio for WebRTC
+  delta?: string; // Audio delta for responses
 }
 
 // POST /observer/:callId : establish WebSocket connection to monitor the call
@@ -48,12 +51,25 @@ router.post('/:callId', express.json(), async (req: Request<{ callId: string }>,
     ws.on('message', (data: WebSocket.Data) => {
       try {
         const message: ObserverMessage = JSON.parse(data.toString());
-        
+
         // Log all messages except audio transcript deltas (too verbose)
         if (message.type !== "response.audio_transcript.delta") {
           console.log(`🔍 [${callId}]`, message.type, message.error ? `Error: ${message.error.message}` : '');
         }
-        
+
+        // Handle audio recording for WebRTC calls
+        const recorder = audioRecorderManager.getRecorder(callId);
+        if (recorder.recording) {
+          // Record incoming audio from user
+          if (message.type === 'input_audio_buffer.append' && message.audio) {
+            recorder.addIncomingAudio(message.audio);
+          }
+          // Record outgoing audio from bot
+          else if (message.type === 'response.output_audio.delta' && message.delta) {
+            recorder.addOutgoingAudio(message.delta);
+          }
+        }
+
         // Handle specific message types
         if (message.type === 'session.created') {
           console.log(`📞 Session created for call ${callId}`);
@@ -117,6 +133,19 @@ router.post('/:callId', express.json(), async (req: Request<{ callId: string }>,
 
     ws.on('close', () => {
       console.log(`📡 Observer WebSocket closed for call ${callId}`);
+
+      // Stop and save recording if active
+      const recorder = audioRecorderManager.getRecorder(callId);
+      if (recorder.recording) {
+        recorder.stop().then(paths => {
+          if (paths.incomingPath || paths.outgoingPath) {
+            console.log(`📼 WebRTC recordings saved for call ${callId}:`, paths);
+          }
+        }).catch(err => {
+          console.error(`Failed to save WebRTC recordings for call ${callId}:`, err);
+        });
+      }
+      audioRecorderManager.removeRecorder(callId);
     });
 
     // Respond immediately; WebSocket continues in background

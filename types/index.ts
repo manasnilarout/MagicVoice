@@ -2,6 +2,11 @@ export interface SessionConfig {
   type: string;
   model: string;
   instructions: string;
+  voice: string;
+  turn_detection: {
+    type: string;
+  };
+  temperature?: number;
   tools?: Array<{
     type: "function";
     name: string;
@@ -21,12 +26,9 @@ export interface SessionConfig {
       format?: {
         type: string;
       };
-      turn_detection?: {
-        type: string;
-      };
     };
-    output: {
-      voice: string;
+    output?: {
+      voice?: string;
       format?: {
         type: string;
       };

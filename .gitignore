@@ -121,6 +121,9 @@ Thumbs.db
 *.flv
 *.wmv
 
+# Audio recordings directory
+recordings/
+
 # Backup files
 *.bak
 *.backup
