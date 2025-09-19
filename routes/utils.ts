@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { SessionConfig } from '../types/index.js';
 import { getConfiguration } from '../config/app.config.js';
+import { FUNCTION_DEFINITIONS } from '../functions/index.js';
 
 dotenv.config();
 
@@ -96,7 +97,13 @@ export function makeSession(language: string = 'english', personaType?: string):
     instructions: instructions,
     turn_detection: { type: "server_vad" },
     temperature: config.bot.temperature || 0.8,
-    voice: config.bot.voice
+    voice: config.bot.voice,
+    tools: FUNCTION_DEFINITIONS,
+    tool_choice: "auto",
+    audio: {
+      input: { noise_reduction: { type: "near_field" } },
+      output: { voice: config.bot.voice },
+    },
   };
 }
 

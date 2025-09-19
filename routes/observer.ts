@@ -2,11 +2,32 @@ import express, { Request, Response } from 'express';
 import WebSocket from 'ws';
 import { makeHeaders } from './utils.js';
 import { audioRecorderManager } from '../utils/audioUtils.js';
+import { executeFunctionCall } from '../functions/index.js';
 
 const router = express.Router();
 
 interface ObserverMessage {
   type: string;
+  event_id?: string;
+  response_id?: string;
+  item_id?: string;
+  output_index?: number;
+  call_id?: string;
+  name?: string;
+  arguments?: string;
+  item?: {
+    type?: string;
+    name?: string;
+    call?: {
+      call_id: string;
+      arguments: string;
+    };
+  };
+  call?: {
+    call_id: string;
+    function_name: string;
+    arguments: string;
+  };
   error?: {
     message: string;
   };
@@ -54,6 +75,50 @@ router.post('/:callId', express.json(), async (req: Request<{ callId: string }>,
           console.log(`📞 Session created for call ${callId}`);
         } else if (message.type === 'response.done') {
           console.log(`✅ Response completed for call ${callId}`);
+        } else if (message.type === 'response.function_call_arguments.done') {
+          console.log(`🔧 Function call completed for call ${callId}`);
+          try {
+            const functionName = message.name;
+            const args = JSON.parse(message.arguments || '{}');
+            const callIdForFunction = message.call_id;
+            console.log(`🔧 [${callId}] Executing function: ${functionName}`);
+
+            const result = executeFunctionCall(functionName!, args);
+
+            // Send function result back to OpenAI
+            const functionResultMessage = {
+              type: 'conversation.item.create',
+              item: {
+                type: 'function_call_output',
+                call_id: callIdForFunction,
+                output: JSON.stringify(result)
+              }
+            };
+
+            ws.send(JSON.stringify(functionResultMessage));
+
+            // Trigger response generation after function execution
+            ws.send(JSON.stringify({ type: 'response.create' }));
+
+          } catch (error) {
+            console.error(`❌ [${callId}] Error executing function call:`, error);
+
+            // Send error result back to OpenAI
+            const errorMessage = {
+              type: 'conversation.item.create',
+              item: {
+                type: 'function_call_output',
+                call_id: message.call_id,
+                output: JSON.stringify({
+                  success: false,
+                  message: `Error executing function: ${error instanceof Error ? error.message : 'Unknown error'}`
+                })
+              }
+            };
+
+            ws.send(JSON.stringify(errorMessage));
+            ws.send(JSON.stringify({ type: 'response.create' }));
+          }
         } else if (message.type === 'error') {
           console.error(`❌ Error in call ${callId}:`, message.error);
         }

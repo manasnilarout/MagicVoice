@@ -11,6 +11,7 @@ import {
   TwilioCallRequest,
   TwilioWebhookRequest
 } from '../types/index.js';
+import { executeFunctionCall } from '../functions/index.js';
 
 dotenv.config();
 
@@ -37,7 +38,10 @@ const LOG_EVENT_TYPES = [
     'input_audio_buffer.speech_stopped',
     'input_audio_buffer.speech_started',
     'session.created',
-    'session.updated'
+    'session.updated',
+    'response.output_item.added',
+    'response.output_item.done',
+    'conversation.item.created'
 ];
 
 // Enhanced request interface for calls
@@ -165,13 +169,15 @@ export const mediaStreamWebSocketHandler = (ws: WebSocket, _req: Request) => {
         type: 'realtime',
         model: "gpt-4o-realtime-preview",
         output_modalities: ["audio"],
+        tools: baseSession.tools,
+        tool_choice: "auto",
         audio: {
-          input: { 
-            format: { type: 'audio/pcmu' }, 
-            turn_detection: { type: "server_vad" } 
+          input: {
+            format: { type: 'audio/pcmu' },
+            turn_detection: { type: "server_vad" }
           },
           output: {
-            format: { type: 'audio/pcmu' }, 
+            format: { type: 'audio/pcmu' },
             voice: getAppConfiguration(callPersonaType).bot.voice
           },
         },
@@ -181,6 +187,8 @@ export const mediaStreamWebSocketHandler = (ws: WebSocket, _req: Request) => {
 
     const currentConfig = getAppConfiguration(callPersonaType);
     console.log(`📋 Sending session update with ${callLanguage} instructions for persona: ${currentConfig.persona.name}`);
+    console.log(`🔧 Tools included in session:`, baseSession.tools?.map(t => t.name).join(', ') || 'None');
+    console.log(`🎯 Tool choice: ${sessionUpdate.session.tool_choice}`);
     openAiWs.send(JSON.stringify(sessionUpdate));
     
     // Trigger initial response after session setup
@@ -244,7 +252,12 @@ export const mediaStreamWebSocketHandler = (ws: WebSocket, _req: Request) => {
       const response: OpenAIRealtimeMessage = JSON.parse(data.toString());
 
       if (LOG_EVENT_TYPES.includes(response.type)) {
-        console.log(`📌 OpenAI event: ${response.type}`);
+        console.log(`📌 OpenAI event: ${response.type}`, response.item ? `(item type: ${response.item.type})` : '');
+      }
+
+      // Log ALL events for debugging function calls
+      if (response.type.includes('function') || response.type.includes('tool')) {
+        console.log(`🔧 Function-related event: ${response.type}`, JSON.stringify(response, null, 2));
       }
 
       // Handle audio output from OpenAI
@@ -282,6 +295,54 @@ export const mediaStreamWebSocketHandler = (ws: WebSocket, _req: Request) => {
       if (response.type === 'input_audio_buffer.speech_started') {
         console.log('🎤 User started speaking (interruption)');
         handleSpeechStartedEvent();
+      }
+
+      // Handle function calls - correct event types for Realtime API
+      if (response.type === 'response.function_call_arguments.done') {
+        console.log('🔧 Function call arguments completed');
+        try {
+          const functionName = response.name;
+          const args = JSON.parse(response.arguments || '{}');
+          const callId = response.call_id;
+
+          console.log(`🔧 Executing function: ${functionName} with args:`, args);
+
+          const result = executeFunctionCall(functionName!, args);
+
+          // Send function result back to OpenAI
+          const functionResultMessage = {
+            type: 'conversation.item.create',
+            item: {
+              type: 'function_call_output',
+              call_id: callId,
+              output: JSON.stringify(result)
+            }
+          };
+
+          openAiWs.send(JSON.stringify(functionResultMessage));
+
+          // Trigger response generation after function execution
+          openAiWs.send(JSON.stringify({ type: 'response.create' }));
+
+        } catch (error) {
+          console.error('❌ Error executing function call:', error);
+
+          // Send error result back to OpenAI
+          const errorMessage = {
+            type: 'conversation.item.create',
+            item: {
+              type: 'function_call_output',
+              call_id: response.call_id,
+              output: JSON.stringify({
+                success: false,
+                message: `Error executing function: ${error instanceof Error ? error.message : 'Unknown error'}`
+              })
+            }
+          };
+
+          openAiWs.send(JSON.stringify(errorMessage));
+          openAiWs.send(JSON.stringify({ type: 'response.create' }));
+        }
       }
 
       // Log conversation events
