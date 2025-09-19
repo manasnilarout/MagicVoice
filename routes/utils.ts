@@ -4,6 +4,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { SessionConfig } from '../types/index.js';
 import { getConfiguration } from '../config/app.config.js';
+import { FUNCTION_DEFINITIONS } from '../functions/index.js';
 
 dotenv.config();
 
@@ -94,6 +95,8 @@ export function makeSession(language: string = 'english', personaType?: string):
     type: "realtime",
     model: config.bot.model,
     instructions: instructions,
+    tools: FUNCTION_DEFINITIONS,
+    tool_choice: "auto",
     audio: {
       input: { noise_reduction: { type: "near_field" } },
       output: { voice: config.bot.voice },
