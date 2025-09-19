@@ -287,6 +287,12 @@
           </p>
           
           <div class="controls">
+            <div class="input-group">
+              <label style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="webrtcEnableRecording" style="width: auto; margin: 0;" />
+                <span>Enable call recording</span>
+              </label>
+            </div>
             <button id="webrtcStart" class="primary">Start Voice Chat</button>
           </div>
           
@@ -312,16 +318,23 @@
           <div class="controls">
             <div class="input-group">
               <label for="phoneNumber">Phone Number</label>
-              <input 
-                type="tel" 
-                id="phoneNumber" 
+              <input
+                type="tel"
+                id="phoneNumber"
                 class="phone-input"
-                placeholder="+919876543210" 
+                placeholder="+919876543210"
                 pattern="^\+[1-9]\d{1,14}$"
               />
               <div class="hint">Use E.164 format (e.g., +919876543210 for India)</div>
             </div>
-            
+
+            <div class="input-group">
+              <label style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="enableRecording" style="width: auto; margin: 0;" />
+                <span>Enable call recording</span>
+              </label>
+            </div>
+
             <button id="startCallBtn" class="success">Start Call</button>
             <button id="endCallBtn" class="danger" disabled>End Call</button>
           </div>
@@ -382,16 +395,24 @@
         }
 
         updateStatus('webrtcStatus', 'Initializing...', 'connecting');
-        addLog('webrtcLogs', 'Starting WebRTC voice connection');
+        addLog('webrtcLogs', `Starting WebRTC voice connection${$('webrtcEnableRecording').checked ? ' (Recording enabled)' : ''}`);
         
         try {
-          // Get microphone permission
-          localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          // Get microphone permission with proper constraints
+          localStream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              echoCancellation: true,
+              noiseSuppression: true,
+              autoGainControl: true
+            }
+          });
           const audioTrack = localStream.getAudioTracks()[0];
           addLog('webrtcLogs', `Microphone access granted: ${audioTrack.label}`, 'success');
 
-          // Create peer connection
-          pc = new RTCPeerConnection({});
+          // Create peer connection with STUN server
+          pc = new RTCPeerConnection({
+            iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+          });
           
           pc.onconnectionstatechange = () => {
             addLog('webrtcLogs', `Connection state: ${pc.connectionState}`);
@@ -414,7 +435,10 @@
           };
 
           // Add local audio
-          localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+          localStream.getTracks().forEach(track => {
+            const sender = pc.addTrack(track, localStream);
+            addLog('webrtcLogs', `Added audio track: ${track.kind}, enabled: ${track.enabled}, muted: ${track.muted}`);
+          });
           
           // Create data channel
           const dc = pc.createDataChannel('');
@@ -427,14 +451,21 @@
 
           // Create offer and connect
           addLog('webrtcLogs', 'Creating offer and connecting to server...');
-          const offer = await pc.createOffer();
+          const offer = await pc.createOffer({
+            offerToReceiveAudio: true,
+            offerToReceiveVideo: false
+          });
           await pc.setLocalDescription(offer);
+          addLog('webrtcLogs', `Offer created with ${offer.sdp.includes('sendrecv') ? 'sendrecv' : offer.sdp.includes('sendonly') ? 'sendonly' : 'recvonly'} audio`);
+
+          const enableRecording = $('webrtcEnableRecording').checked;
 
           const resp = await fetch('/rtc', {
             method: 'POST',
-            headers: { 
+            headers: {
               'Content-Type': 'application/sdp',
-              'X-Language': getSelectedLanguage()
+              'X-Language': getSelectedLanguage(),
+              'X-Enable-Recording': enableRecording ? 'true' : 'false'
             },
             body: offer.sdp,
           });
@@ -510,14 +541,17 @@
           updateStatus('twilioStatus', 'Initiating call...', 'connecting');
           $('startCallBtn').disabled = true;
           
-          addLog('twilioLogs', `Calling ${phoneNumber}...`);
+          addLog('twilioLogs', `Calling ${phoneNumber}...${$('enableRecording').checked ? ' (Recording enabled)' : ''}`);
           
+          const enableRecording = $('enableRecording').checked;
+
           const response = await fetch('/twilio-realtime/call', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
+            body: JSON.stringify({
               phoneNumber,
-              language: getSelectedLanguage()
+              language: getSelectedLanguage(),
+              enableRecording
             })
           });
 

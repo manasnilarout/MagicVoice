@@ -2,20 +2,22 @@ export interface SessionConfig {
   type: string;
   model: string;
   instructions: string;
-  audio: {
-    input: {
+  voice: string;
+  turn_detection: {
+    type: string;
+  };
+  temperature?: number;
+  audio?: {
+    input?: {
       noise_reduction?: {
         type: string;
       };
       format?: {
         type: string;
       };
-      turn_detection?: {
-        type: string;
-      };
     };
-    output: {
-      voice: string;
+    output?: {
+      voice?: string;
       format?: {
         type: string;
       };

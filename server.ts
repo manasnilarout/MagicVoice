@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import twilioRealtimeRouter, { mediaStreamWebSocketHandler } from './routes/twilio-realtime.js';
 import rtcRouter from './routes/rtc.js';
 import observerRouter from './routes/observer.js';
+import recordingsRouter from './routes/recordings.js';
 import { getConfiguration, getAvailablePersonas } from './config/app.config.js';
 import { externalConfigLoader, hasExternalConfiguration, getConfigurationDirectory } from './config/external-config-loader.js';
 
@@ -27,6 +28,9 @@ app.use('/twilio-realtime', twilioRealtimeRouter);
 // WebRTC routes for browser-based voice interaction
 app.use('/rtc', rtcRouter);
 app.use('/observer', observerRouter);
+
+// Recordings management routes
+app.use('/api/recordings', recordingsRouter);
 
 // Register WebSocket endpoint for Twilio Media Stream
 (app as any).ws('/twilio-realtime/media-stream', mediaStreamWebSocketHandler);

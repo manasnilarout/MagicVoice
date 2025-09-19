@@ -94,10 +94,9 @@ export function makeSession(language: string = 'english', personaType?: string):
     type: "realtime",
     model: config.bot.model,
     instructions: instructions,
-    audio: {
-      input: { noise_reduction: { type: "near_field" } },
-      output: { voice: config.bot.voice },
-    },
+    turn_detection: { type: "server_vad" },
+    temperature: config.bot.temperature || 0.8,
+    voice: config.bot.voice
   };
 }
 
