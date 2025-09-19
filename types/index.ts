@@ -2,6 +2,17 @@ export interface SessionConfig {
   type: string;
   model: string;
   instructions: string;
+  tools?: Array<{
+    type: "function";
+    name: string;
+    description: string;
+    parameters: {
+      type: "object";
+      properties: Record<string, any>;
+      required: string[];
+    };
+  }>;
+  tool_choice?: string;
   audio: {
     input: {
       noise_reduction?: {
@@ -58,8 +69,25 @@ export interface OpenAIRealtimeMessage {
   session?: any;
   delta?: string;
   item_id?: string;
+  event_id?: string;
+  response_id?: string;
+  output_index?: number;
+  call_id?: string;
+  name?: string;
+  arguments?: string;
   item?: {
-    role: string;
+    role?: string;
+    type?: string;
+    name?: string;
+    call?: {
+      call_id: string;
+      arguments: string;
+    };
+  };
+  call?: {
+    call_id: string;
+    function_name: string;
+    arguments: string;
   };
   error?: {
     message: string;
